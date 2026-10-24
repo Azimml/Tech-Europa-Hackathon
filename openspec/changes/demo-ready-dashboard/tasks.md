@@ -32,6 +32,7 @@ Run browser tests only against test servers (:3201 for the real server, :3202 fo
 - [x] 5.3 `docs/DEMO_SCRIPT.md`: the keys table, presenter mode in the pre-flight list, "New call", the new cues (tags, risk line, banner, flash, Call ended), the evaluation view in the walkthrough and video, and an optional real-phone section. `README.md`: the dashboard status, the `/phone` route, and the corrected event list (`alarm`, `roles`, `screens`). Verify that neither file mentions "End call / Reset"
 - [x] 5.4 Re-take `docs/dashboard-alarm.png` from a real replay of `scam-fake-police` in presenter mode at 1920×1080 with the 110 request pending, the transcript scrolled to the alarm line. Verify by viewing it
 - [x] 5.5 `openspec validate --strict` passes for this change and for `generic-names-beep-story-ui`
+- [x] 5.6 After rebasing onto the Haiku scorer switch (`24173f2`), set `SCORER_MODEL=claude-haiku-5-5` in the demo laptop's `.env` (the agent stays on Opus 5.5), then run `phone-fit.mjs`, `story-replay-test.mjs` and `story-live-test.mjs` on :3201. Verify ALL PASSED and that the normal call stays SAFE. Measured: the alarm 1.5–1.8 s after the triggering sentence in replays and 1.6 s live (Opus: 2.7 s); CAUTION came on line 3 in the live test (line 5 with Opus). The runbook cues and `docs/dashboard-alarm.png` were updated to match
 
 ## Workflow follow-up
 
