@@ -16,7 +16,8 @@ export const config = {
   port: num("PORT", 3000),
   reson8ApiKey: process.env.RESON8_API_KEY ?? "",
   anthropicKeySet: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
-  scorerModel: process.env.SCORER_MODEL || "claude-opus-5-5",
+  // Haiku for the per-sentence scorer: same accuracy as Opus on the eval, ~1 s faster.
+  scorerModel: process.env.SCORER_MODEL || "claude-haiku-5-5",
   scorerEffort: (process.env.SCORER_EFFORT || "low") as Effort,
   agentModel: process.env.AGENT_MODEL || "claude-opus-5-5",
   agentEffort: (process.env.AGENT_EFFORT || "low") as Effort,

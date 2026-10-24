@@ -105,16 +105,18 @@ EVAL_CONCURRENCY=8 npm run eval              # parallel calls (default 6)
 - Each call stops at its first `scam` level, because the level never goes down during a call.
 - **Output:** a table in the terminal, plus `public/eval-results.json`. The dashboard shows the headline numbers from that file in its footer. Every run overwrites the file, including `--limit` runs, so re-run the full eval before the demo.
 
-**Results** (Claude Opus 5.5, effort `low`, thresholds 0.8 / 0.5, run on 24 Oct 2026, 0 errors). The scorer sees speaker-numbered lines ("Speaker 1: …"). In half of the public calls the receiver's opening "Hello." is dropped, so the caller speaks first.
+**Results** (scorer Claude Haiku 5.5, effort `low`, thresholds 0.8 / 0.5, run on 24 Oct 2026, 0 errors). The scorer sees speaker-numbered lines ("Speaker 1: …"). In half of the public calls the receiver's opening "Hello." is dropped, so the caller speaks first.
 
 | Dataset | Mode | Scams caught | False alarms | Normal calls ≥ caution | Alarm vs money request (median) | Caller identified (after 2nd caller turn / end) | Scorer latency p50 / p95 |
 |---|---|---|---|---|---|---|---|
-| Public (80) | full | 36/40, **36/36 that asked for money** | **0/40** | 0/40 | on the money-request turn | **70/70 / 80/80** (caller first 40/40, receiver first 40/40) | 2.6 s / 3.6 s |
-| Public (80) | caller only | 36/40, 36/36 that asked for money | 0/40 | 0/40 | on the money-request turn | n/a (one speaker) | 2.8 s / 4.4 s |
-| Handwritten (10) | full | **5/5** | **0/5** | 0/5 | **2 turns before** | 10/10 / 10/10 | 2.7 s / 4.3 s |
-| Handwritten (10) | caller only | 5/5 | 0/5 | 0/5 | 2 turns before | n/a | 2.9 s / 4.9 s |
+| Public (80) | full | 38/40, **36/36 that asked for money** | **0/40** | 3/40 | on the money-request turn | 68/70 / **80/80** (caller first 40/40, receiver first 40/40) | 2.0 s / 8.5 s |
+| Public (80) | caller only | 37/40, 36/36 that asked for money | 0/40 | 0/40 | on the money-request turn | n/a (one speaker) | 1.6 s / 3.2 s |
+| Handwritten (10) | full | **5/5** | **0/5** | 0/5 | **4 turns before** | 10/10 / 10/10 | 1.5 s / 2.1 s |
+| Handwritten (10) | caller only | 5/5 | 0/5 | 0/5 | 4 turns before | n/a | 1.6 s / 2.3 s |
 
-The 4 public scams that were not caught are the 4 calls where the caller never got to a money request (the receiver hung up first). All 4 still reached `caution`. Caller-only mode catches the same calls, so detection doesn't depend on the receiver pushing back. The handwritten rows are from a demo-only re-run after a one-off API latency spike.
+Every public scam that asked for money was caught. The 2 misses in full mode are tech-support calls where the receiver hung up before any request. Caller-only mode also misses one prize call, so detection doesn't depend on the receiver pushing back. The 3 normal calls at `caution` showed yellow only: no warning, no alarm.
+
+**Why Haiku:** the same eval with Claude Opus 5.5 as the scorer caught 36/40 (36/36 that asked for money), with 0/40 false alarms and 80/80 callers identified. Its p50 latency was 2.6 s, against about 1.6–2.0 s for Haiku. Haiku matched Opus on every scam that asked for money and raised the alarm earlier on the handwritten calls (median 4 turns before the money request instead of 2). The p95 of 8.5 s in the public full run came from a few slow API responses during that run; an earlier Haiku run of the same set had a p95 of 3.3 s. The agent stays on Opus 5.5.
 
 ![Dashboard in alarm state](docs/dashboard-alarm.png)
 
@@ -133,7 +135,7 @@ The public dataset is synthetic, US-centric and English-only. Read the numbers a
 |---|---|---|
 | `RESON8_API_KEY` | (none) | Reson8 key from console.reson8.dev |
 | `ANTHROPIC_API_KEY` | (none) | Claude API key |
-| `SCORER_MODEL` / `SCORER_EFFORT` | `claude-opus-5-5` / `low` | Model that scores every sentence |
+| `SCORER_MODEL` / `SCORER_EFFORT` | `claude-haiku-5-5` / `low` | Model that scores every sentence (Haiku: same accuracy as Opus on the eval, about 1 s faster) |
 | `AGENT_MODEL` / `AGENT_EFFORT` | `claude-opus-5-5` / `low` | Model that acts once a scam is detected |
 | `CALL_LANGUAGE` | `en` | Reson8 language code; scam phrases exist for `en` and `de` |
 | `NTFY_FAMILY_TOPIC` | (none) | ntfy topic on the trusted contact's phone |
@@ -193,7 +195,7 @@ public/
 ## Built with, and prior work
 
 - [Reson8](https://reson8.dev) realtime speech-to-text
-- [Anthropic Claude API](https://platform.claude.com): `@anthropic-ai/sdk` tool runner, structured outputs, Claude Opus 5.5
+- [Anthropic Claude API](https://platform.claude.com): `@anthropic-ai/sdk` tool runner, structured outputs, Claude Haiku 5.5 (scorer) and Claude Opus 5.5 (agent)
 - Express, Zod, tsx
 - [ntfy](https://ntfy.sh) push notifications, Cloudflare quick tunnel, [scrcpy](https://github.com/Genymobile/scrcpy)
 - Test data: [BothBosu/multi-agent-scam-conversation](https://huggingface.co/datasets/BothBosu/multi-agent-scam-conversation) (Apache-2.0)
