@@ -5,7 +5,11 @@
 //   npm run eval -- --limit 10 --only demo        # quick smoke run
 //   npm run eval -- --mode caller                 # caller turns only
 //   EVAL_CONCURRENCY=8 npm run eval               # parallel calls (default 6)
+//   SCORER_MODEL=claude-haiku-5-5 npm run eval -- --out eval/results-haiku.json
+//                                                 # compare a model without replacing the dashboard numbers
 import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { config } from "../server/config.js";
 import { toRole, type Role } from "../server/hub.js";
 import { escalate, levelFor, scoreCall, type Level, type Turn } from "../server/scorer.js";
@@ -39,10 +43,16 @@ interface CallResult {
 const FILES: Record<DatasetName, string> = { dataset: "dataset.json", demo: "demo-scripts.json" };
 
 function parseArgs(argv: string[]) {
-  const options = { limit: Infinity, only: null as DatasetName | null, modes: ["full", "caller"] as Mode[] };
+  const options = {
+    limit: Infinity,
+    only: null as DatasetName | null,
+    modes: ["full", "caller"] as Mode[],
+    out: "../public/eval-results.json",
+  };
   for (let i = 0; i < argv.length; i++) {
     const value = argv[i + 1];
     if (argv[i] === "--limit") options.limit = Number(value);
+    else if (argv[i] === "--out") options.out = value;
     else if (argv[i] === "--only") options.only = value as DatasetName;
     else if (argv[i] === "--mode") options.modes = value === "both" ? ["full", "caller"] : [value as Mode];
     else continue;
@@ -280,7 +290,10 @@ async function main() {
     limit: Number.isFinite(options.limit) ? options.limit : null,
     runs,
   };
-  const target = new URL("../public/eval-results.json", import.meta.url);
+  // --out is relative to the current directory; the default feeds the dashboard tile.
+  const target = options.out === "../public/eval-results.json"
+    ? new URL(options.out, import.meta.url)
+    : pathToFileURL(resolve(options.out));
   await writeFile(target, `${JSON.stringify(output, null, 2)}\n`);
   console.log(`\nWrote ${target.pathname}`);
 }

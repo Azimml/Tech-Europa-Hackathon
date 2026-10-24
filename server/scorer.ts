@@ -103,11 +103,15 @@ export async function scoreCall(turns: Turn[]): Promise<ScoreResult> {
   const transcript = turns.map((turn) => `${turn.speaker}: ${turn.text}`).join("\n");
   const started = performance.now();
 
+  // Haiku has no server-side refusal fallback; Opus and Sonnet do.
+  const fallback = config.scorerModel.includes("haiku")
+    ? {}
+    : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const };
+
   const response = await client.beta.messages.create({
     model: config.scorerModel,
     max_tokens: 4000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...fallback,
     output_config: {
       effort: config.scorerEffort,
       format: { type: "json_schema", schema: OUTPUT_SCHEMA },
