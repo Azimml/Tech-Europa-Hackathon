@@ -4,7 +4,7 @@
 
 Schutzengel listens to an older person's phone call on speakerphone and catches a scam **while the call is still running**. Reson8 transcribes the call live. Claude reads every sentence, and the moment the call turns into a scam it warns the person on the phone, alerts their trusted contact, drafts a police report, and asks a human before calling the police.
 
-**🎥 Demo video:** [Loom link](LOOM_LINK_HERE) · **📄 Demo runbook:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
+**🎥 Demo video:** [Loom link](https://www.loom.com/share/1727f79f2cb04e4aa50a31d33d7ca4c7) · **📄 Demo runbook:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
 
 ![Dashboard in alarm state: the scam warning on the receiver's phone, evidence tags in the transcript, the risk line climbing over the alarm threshold, and Claude's actions below](docs/dashboard-alarm.png)
 
