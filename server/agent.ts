@@ -10,21 +10,33 @@ import type { Signals } from "./scorer.js";
 const client = new Anthropic();
 
 export interface AgentActions {
-  warnGrandma(message: string): Promise<string>;
-  notifyFamily(summary: string, quotes: string[]): Promise<string>;
+  notifyTrustedContact(summary: string, quotes: string[]): Promise<string>;
   draftPoliceReport(report: PoliceReport): Promise<string>;
   requestPoliceCall(reason: string, evidence: string): Promise<string>;
   log(tool: string, detail: string): void;
 }
 
-const SYSTEM = `You are Schutzengel, a guardian angel that protects Erika, 78, during phone calls. She lives alone; her daughter is Lena.
-The live scam detector has just flagged the current call. Act immediately, in this order:
-1. warn_grandma: one calm, plain-language warning she can read and hear (at most 25 words). Name what the caller is doing and tell her to hang up. Example: "This is a scam. Real police never collect money or jewelry. Hang up now. Lena has been told."
-2. notify_family: tell Lena what is happening, quoting the caller's key words.
-3. draft_police_report: a factual report from the transcript only. Write "not mentioned" for anything not said. Never invent names, numbers or addresses.
-4. request_police_call: only if the caller demanded money, valuables, card details/PINs, remote access, or a handover, while claiming authority or a family emergency. A human approves this; do not call it twice.
+const SYSTEM = `You are Schutzengel, a guardian angel that protects the receiver of a phone call (often an older person living alone).
+The live scam detector has just flagged the current call, and the receiver has already been shown a warning; do not warn them again.
+Act immediately, in this order:
+1. notify_trusted_contact: tell the receiver's trusted contact what is happening, quoting the caller's key words. In the summary, refer to the receiver as "the receiver", never by a name heard on the call.
+2. draft_police_report: a factual report from the transcript only. Write "not mentioned" for anything not said. Never invent names, numbers or addresses.
+3. request_police_call: only if the caller demanded money, valuables, card details/PINs, remote access, or a handover, while claiming authority or a family emergency. A human approves this; do not call it twice.
 Then stop and reply with one short sentence summarising what you did.
-Latency-sensitive: Erika may be about to hand over her savings, so call the tools right away without deliberating.`;
+Latency-sensitive: the receiver may be about to hand over their savings, so call the tools right away without deliberating.`;
+
+// Runs when the caller demands money or valuables after the alarm already fired
+// (the first pass usually runs on a secrecy line, before any demand).
+const FOLLOW_UP_SYSTEM = `You are Schutzengel, a guardian angel that protects the receiver of a phone call (often an older person living alone).
+The receiver has already been warned and their trusted contact has already been told about this scam call. The live detector now reports that the caller has made a demand for money or valuables.
+Act immediately, in this order:
+1. draft_police_report: rewrite the report from the full transcript, now including the demand and any handover details (who, what, when, where). Write "not mentioned" for anything not said. Never invent names, numbers or addresses.
+2. request_police_call: only if the caller demanded money, valuables, card details/PINs, remote access, or a handover, while claiming authority or a family emergency. A human approves this; do not call it twice.
+Then stop and reply with one short sentence summarising what you did.
+Latency-sensitive: call the tools right away without deliberating.`;
+
+export type AgentMode = "alarm" | "follow-up";
+const FOLLOW_UP_TOOLS = new Set(["draft_police_report", "request_police_call"]);
 
 const ReportInput = z.object({
   summary: z.string().describe("Two or three sentences: what happened on the call"),
@@ -36,27 +48,23 @@ const ReportInput = z.object({
   scam_type: z.string().describe("Type of scam, e.g. fake police, grandchild emergency"),
 });
 
-export async function runAgent(transcript: string, signals: Signals, actions: AgentActions): Promise<string> {
-  const tools = [
+export async function runAgent(
+  transcript: string,
+  signals: Signals,
+  actions: AgentActions,
+  mode: AgentMode = "alarm",
+): Promise<string> {
+  const allTools = [
     betaZodTool({
-      name: "warn_grandma",
-      description: "Show and read out a short warning on Erika's phone, on top of the call.",
-      inputSchema: z.object({ message: z.string().describe("At most 25 words, plain language") }),
-      run: async ({ message }) => {
-        actions.log("warn_grandma", message);
-        return actions.warnGrandma(message);
-      },
-    }),
-    betaZodTool({
-      name: "notify_family",
-      description: "Send an urgent push notification to Erika's daughter Lena.",
+      name: "notify_trusted_contact",
+      description: "Send an urgent push notification to the receiver's trusted contact.",
       inputSchema: z.object({
-        summary: z.string().describe("What is happening right now, at most 40 words"),
+        summary: z.string().describe('What is happening right now, at most 40 words. Call the person who answered "the receiver", without names.'),
         quotes: z.array(z.string()).describe("One to three exact quotes from the caller"),
       }),
       run: async ({ summary, quotes }) => {
-        actions.log("notify_family", summary);
-        return actions.notifyFamily(summary, quotes);
+        actions.log("notify_trusted_contact", summary);
+        return actions.notifyTrustedContact(summary, quotes);
       },
     }),
     betaZodTool({
@@ -82,6 +90,8 @@ export async function runAgent(transcript: string, signals: Signals, actions: Ag
       },
     }),
   ];
+  // The follow-up cannot notify again: the trusted contact already knows.
+  const tools = mode === "follow-up" ? allTools.filter((tool) => FOLLOW_UP_TOOLS.has(tool.name)) : allTools;
 
   const finalMessage = await client.beta.messages.toolRunner({
     model: config.agentModel,
@@ -90,7 +100,7 @@ export async function runAgent(transcript: string, signals: Signals, actions: Ag
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
     output_config: { effort: config.agentEffort },
-    system: SYSTEM,
+    system: mode === "follow-up" ? FOLLOW_UP_SYSTEM : SYSTEM,
     tools,
     messages: [
       {

@@ -1,10 +1,17 @@
 // Live call state plus the Server-Sent Events channel that pushes every
-// change to the dashboard and to grandma's phone.
+// change to the dashboard (and the receiver's screen).
 import type { Response } from "express";
 import type { Level, Signals } from "./scorer.js";
 
 export type { Level };
-export type Role = "caller" | "grandma" | "unknown";
+export type Role = "caller" | "receiver" | "unknown";
+
+// Stored test and demo calls still say "grandma" for the person who answered.
+export function toRole(stored: string): Role {
+  if (stored === "caller") return "caller";
+  if (stored === "receiver" || stored === "grandma") return "receiver";
+  return "unknown";
+}
 
 export interface Segment {
   id: number;
@@ -64,7 +71,13 @@ export interface Call {
   segments: Segment[];
   scores: Score[];
   level: Level;
+  // Speaker-id keys in order of first appearance ("Speaker 1", "Speaker 2").
+  speakers: string[];
   roles: Record<string, Role>;
+  // Who decided the roles: nobody yet, Claude from the content, or the operator.
+  rolesSource: "none" | "claude" | "manual";
+  // A disagreeing caller identification waiting for confirmation.
+  pendingCaller: { speaker: string; count: number } | null;
   alertAt: number | null;
   reactionMs: number | null;
   warning: string | null;
@@ -77,6 +90,9 @@ export interface Call {
 
 let callCounter = 0;
 
+// Changes on every server start, so open dashboards can tell they talk to a restarted server.
+export const BUILD_ID = Date.now().toString(36);
+
 function newCall(): Call {
   return {
     id: ++callCounter,
@@ -84,7 +100,10 @@ function newCall(): Call {
     segments: [],
     scores: [],
     level: "safe",
+    speakers: [],
     roles: {},
+    rolesSource: "none",
+    pendingCaller: null,
     alertAt: null,
     reactionMs: null,
     warning: null,
@@ -106,9 +125,18 @@ class Hub {
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
     });
-    res.write(`data: ${JSON.stringify(this.snapshot())}\n\n`);
     this.clients.add(res);
-    res.on("close", () => this.clients.delete(res));
+    res.write(`data: ${JSON.stringify(this.snapshot())}\n\n`);
+    this.sendScreens();
+    res.on("close", () => {
+      this.clients.delete(res);
+      this.sendScreens();
+    });
+  }
+
+  // How many dashboards are connected: a forgotten second tab becomes visible.
+  private sendScreens(): void {
+    this.send({ type: "screens", count: this.clients.size });
   }
 
   send(event: { type: string; [key: string]: unknown }): void {
@@ -117,7 +145,7 @@ class Hub {
   }
 
   snapshot() {
-    return { type: "state", call: this.call };
+    return { type: "state", call: this.call, buildId: BUILD_ID, screens: this.clients.size };
   }
 
   reset(): Call {

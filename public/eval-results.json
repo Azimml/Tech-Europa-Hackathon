@@ -1,0 +1,143 @@
+{
+  "generatedAt": "2026-10-24T12:28:41.497Z",
+  "model": "claude-opus-5-5",
+  "effort": "low",
+  "thresholds": {
+    "scam": 0.8,
+    "caution": 0.5
+  },
+  "limit": null,
+  "runs": [
+    {
+      "dataset": "dataset",
+      "mode": "full",
+      "scams": 40,
+      "normals": 40,
+      "detected": 36,
+      "scamsWithDemand": 36,
+      "detectedWithDemand": 36,
+      "falseAlarms": 0,
+      "cautionOnNormal": 0,
+      "leadMedian": 0,
+      "leadMin": -2,
+      "leadCount": 36,
+      "warnedBeforeMoney": 2,
+      "latencyP50": 2632,
+      "latencyP95": 3607,
+      "rolesAfter2": {
+        "correct": 70,
+        "total": 70
+      },
+      "rolesFinal": {
+        "correct": 80,
+        "total": 80
+      },
+      "rolesFinalCallerFirst": {
+        "correct": 40,
+        "total": 40
+      },
+      "rolesFinalReceiverFirst": {
+        "correct": 40,
+        "total": 40
+      },
+      "scorerCalls": 634,
+      "errors": 0,
+      "missed": [
+        "bb-mas-test-160-reward",
+        "bb-mas-test-161-reward",
+        "bb-mas-test-265-support",
+        "bb-mas-test-270-support"
+      ],
+      "falseAlarmIds": []
+    },
+    {
+      "dataset": "dataset",
+      "mode": "caller",
+      "scams": 40,
+      "normals": 40,
+      "detected": 36,
+      "scamsWithDemand": 36,
+      "detectedWithDemand": 36,
+      "falseAlarms": 0,
+      "cautionOnNormal": 0,
+      "leadMedian": 0,
+      "leadMin": -2,
+      "leadCount": 36,
+      "warnedBeforeMoney": 2,
+      "latencyP50": 2790,
+      "latencyP95": 4356,
+      "rolesAfter2": null,
+      "rolesFinal": null,
+      "rolesFinalCallerFirst": null,
+      "rolesFinalReceiverFirst": null,
+      "scorerCalls": 327,
+      "errors": 0,
+      "missed": [
+        "bb-mas-test-160-reward",
+        "bb-mas-test-161-reward",
+        "bb-mas-test-265-support",
+        "bb-mas-test-270-support"
+      ],
+      "falseAlarmIds": []
+    },
+    {
+      "dataset": "demo",
+      "mode": "full",
+      "scams": 5,
+      "normals": 5,
+      "detected": 5,
+      "scamsWithDemand": 5,
+      "detectedWithDemand": 5,
+      "falseAlarms": 0,
+      "cautionOnNormal": 0,
+      "leadMedian": 2,
+      "leadMin": 2,
+      "leadCount": 5,
+      "warnedBeforeMoney": 5,
+      "latencyP50": 2754,
+      "latencyP95": 7577,
+      "rolesAfter2": {
+        "correct": 10,
+        "total": 10
+      },
+      "rolesFinal": {
+        "correct": 10,
+        "total": 10
+      },
+      "rolesFinalCallerFirst": {
+        "correct": 10,
+        "total": 10
+      },
+      "rolesFinalReceiverFirst": null,
+      "scorerCalls": 101,
+      "errors": 0,
+      "missed": [],
+      "falseAlarmIds": []
+    },
+    {
+      "dataset": "demo",
+      "mode": "caller",
+      "scams": 5,
+      "normals": 5,
+      "detected": 5,
+      "scamsWithDemand": 5,
+      "detectedWithDemand": 5,
+      "falseAlarms": 0,
+      "cautionOnNormal": 0,
+      "leadMedian": 2,
+      "leadMin": 0,
+      "leadCount": 5,
+      "warnedBeforeMoney": 4,
+      "latencyP50": 2969,
+      "latencyP95": 64013,
+      "rolesAfter2": null,
+      "rolesFinal": null,
+      "rolesFinalCallerFirst": null,
+      "rolesFinalReceiverFirst": null,
+      "scorerCalls": 53,
+      "errors": 0,
+      "missed": [],
+      "falseAlarmIds": []
+    }
+  ]
+}

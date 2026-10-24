@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schutzengel</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body class="level-safe">
+  <header class="bar top">
+    <div class="brand">SCHUTZENGEL <span class="tagline">a guardian angel for phone calls</span></div>
+    <div id="live" class="live" hidden><span class="dot"></span> LISTENING</div>
+    <div id="conn" class="conn" hidden>reconnecting…</div>
+    <div class="controls">
+      <button id="listen" class="primary">Listen</button>
+      <button id="reset">End call / Reset</button>
+      <button id="hangup">Hang up</button>
+      <button id="swap" title="Swap Caller and Receiver labels">Swap speakers</button>
+      <button id="sound" aria-pressed="true">Sound on</button>
+      <select id="script" aria-label="Scripted call"></select>
+      <button id="replay">Replay</button>
+    </div>
+    <div id="listen-error" class="inline-error" hidden></div>
+    <div id="server-banner" class="server-banner" hidden>The server is running older code. Restart it (<code>npm run dev</code>) and reload this page.</div>
+  </header>
+
+  <section id="status" class="status">
+    <div class="status-level">
+      <span id="level" class="level-word">SAFE</span>
+      <span id="scam-type" class="scam-type"></span>
+    </div>
+    <div class="status-risk">
+      <div class="meter"><div id="risk-fill" class="meter-fill"></div></div>
+      <span id="risk-value" class="risk-value">0.00</span>
+    </div>
+    <div class="status-why">
+      <div id="reason" class="reason"></div>
+      <div id="reaction" class="reaction"></div>
+    </div>
+  </section>
+
+  <main class="story">
+    <section class="panel talk">
+      <h2>Live transcript <span id="roles-note" class="roles-note" hidden></span></h2>
+      <ol id="transcript" class="transcript"></ol>
+    </section>
+
+    <section class="panel receiver">
+      <div class="phone-col">
+        <h2>Receiver's screen</h2>
+        <div id="phone" class="phone phone-safe">
+          <div class="notch"></div>
+          <div class="phone-head">
+            <span class="phone-icon" aria-hidden="true">⚠</span>
+            <span id="phone-label" class="phone-label">Protected</span>
+          </div>
+          <div id="phone-body" class="phone-body"><div id="phone-warning" class="phone-warning"></div></div>
+          <div class="phone-hangup">Hang up</div>
+        </div>
+      </div>
+      <div class="signals-col">
+        <h2>Warning signs</h2>
+        <div id="signals" class="signals"></div>
+      </div>
+    </section>
+
+    <section class="panel actions">
+      <h2>Claude acts <span id="agent-status" class="pill">idle</span></h2>
+      <ol id="tracker" class="tracker"></ol>
+      <div class="details-row">
+        <div id="details" class="details"></div>
+        <details id="agent-log" class="agent-log" open>
+          <summary>Agent log</summary>
+          <ol id="agent-steps" class="agent-steps"></ol>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bar metrics">
+    <div class="tile"><span class="k">Scorer latency</span><span id="m-latency" class="v">–</span></div>
+    <div class="tile"><span class="k">Median this call</span><span id="m-median" class="v">–</span></div>
+    <div class="tile ready"><span class="k">Ready</span><span id="ready" class="v chips"></span></div>
+    <div id="screens-tile" class="tile screens"><span class="k">Dashboards</span><span id="screens" class="v">–</span></div>
+    <div id="eval" class="tile eval" hidden><span class="k">Evaluation</span><span id="eval-text" class="v"></span></div>
+  </footer>
+  <div id="toast" class="toast" hidden></div>
+</body>
+</html>

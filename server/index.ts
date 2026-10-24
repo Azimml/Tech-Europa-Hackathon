@@ -1,7 +1,7 @@
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
-import { hub } from "./hub.js";
+import { BUILD_ID, hub } from "./hub.js";
 import { addSegment, decideApproval, hangUp, swapRoles } from "./pipeline.js";
 import { HttpError, reson8Session } from "./reson8.js";
 import { loadScripts, replay, stopReplay } from "./replay.js";
@@ -14,6 +14,9 @@ app.get("/phone", (_req, res) => res.redirect("/phone.html"));
 
 app.get("/api/config", (_req, res) => {
   res.json({
+    // Bumped when the dashboard needs newer server behaviour (2: "receiver" role, caller identification).
+    protocol: 2,
+    buildId: BUILD_ID,
     reson8: Boolean(config.reson8ApiKey),
     anthropic: config.anthropicKeySet,
     familyPush: Boolean(config.ntfyFamilyTopic),
