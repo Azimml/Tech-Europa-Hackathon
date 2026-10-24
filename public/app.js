@@ -5,16 +5,20 @@
 const $ = (id) => document.getElementById(id);
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const icon = (id, cls = "icon") => `<svg class="${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
 
+// [key, name, icon, what the sign means until Claude finds it]
 const SIGNALS = [
-  ["claims_authority", "Authority"],
-  ["asks_money", "Money ask"],
-  ["pressure", "Pressure"],
-  ["secrecy", "Secrecy"],
+  ["claims_authority", "Authority", "i-landmark", "Claims to be police, a bank, an official or family"],
+  ["asks_money", "Money ask", "i-banknote", "Asks for cash, valuables, card details or PINs"],
+  ["pressure", "Pressure", "i-timer", "Creates fear, panic or urgency"],
+  ["secrecy", "Secrecy", "i-lock", "Says keep it secret, or don't hang up"],
 ];
 const LIT_AT = 0.6;
 const WHO = { caller: "Caller", receiver: "Receiver" };
 const EXPECTED_PROTOCOL = 2; // server protocol this page needs (see /api/config)
+// /phone redirects to ?view=phone: only the receiver's screen, for a real phone.
+const PHONE_VIEW = new URLSearchParams(location.search).get("view") === "phone";
 
 // Servers from before the rename still send "grandma" for the receiver.
 const normRole = (role) => (role === "grandma" ? "receiver" : role);
@@ -26,6 +30,7 @@ let call = null;
 let connected = false;
 let loadedBuild = null; // server build this page first saw
 let screens = 0;
+let phones = 0; // receiver phone views, counted apart from dashboards
 let interim = null; // { speakerId, text } while Reson8 is still hearing a sentence
 
 // A different build id means the server restarted (possibly with new code):
@@ -43,6 +48,7 @@ function apply(event) {
   if (event.type === "state") {
     if (checkBuild(event.buildId)) return;
     if (typeof event.screens === "number") screens = event.screens;
+    phones = event.phones ?? 0;
     const isNewCall = !call || call.id !== event.call.id;
     call = event.call;
     call.speakers ??= [];
@@ -103,18 +109,20 @@ function apply(event) {
       break;
     case "hangup":
       call.hungUp = true;
+      call.hungUpAt = event.at;
       break;
     case "error":
       toast(`${event.where ?? "server"}: ${event.message}`);
       break;
     case "screens":
       screens = event.count;
+      phones = event.phones ?? 0;
       break;
   }
 }
 
 function connect() {
-  const source = new EventSource("/api/events");
+  const source = new EventSource(PHONE_VIEW ? "/api/events?client=phone" : "/api/events");
   source.onmessage = (message) => {
     const event = JSON.parse(message.data);
     if (event.type === "state") connected = true;
@@ -152,25 +160,95 @@ function renderConnection() {
 }
 
 const keyOf = (speakerId) => (speakerId === null || speakerId === undefined ? null : String(speakerId));
-// Claude sometimes wraps quotes in quote marks itself; we add our own.
-const unquote = (text) => String(text ?? "").replace(/^["“”']+|["“”']+$/g, "");
+// Claude sometimes wraps a quote in quote marks itself; we add our own. Only text
+// that is one quote from end to end loses its outer marks, so inner quotes stay paired.
+const unquote = (text) => {
+  const value = String(text ?? "").trim();
+  return /^["“”'].+["“”']$/s.test(value) && !/["“”]/.test(value.slice(1, -1)) ? value.slice(1, -1) : value;
+};
 const seconds = (ms) => (ms === null || ms === undefined ? "–" : `${(ms / 1000).toFixed(1)} s`);
 const clock = (at) => (at ? new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "");
+const pct = (value) => `${Math.round((value ?? 0) * 100)}%`;
+const two = (n) => String(n).padStart(2, "0");
+const duration = (ms) => {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  return `${two(Math.floor(total / 60))}:${two(total % 60)}`;
+};
+
+// innerHTML only when the markup changed: keeps scroll positions and running animations.
+const shownHtml = new WeakMap();
+function setHtml(el, html) {
+  if (shownHtml.get(el) === html) return false;
+  el.innerHTML = html;
+  shownHtml.set(el, html);
+  return true;
+}
 
 function renderStatus() {
   const last = call.scores.at(-1);
   const risk = last?.signals.risk ?? 0;
-  $("risk-fill").style.width = `${Math.round(risk * 100)}%`;
-  $("risk-value").textContent = risk.toFixed(2);
+  $("risk-value").textContent = pct(risk);
   $("level").textContent = call.level.toUpperCase();
   const type = last?.signals.scam_type;
-  $("scam-type").textContent = type && type !== "none" ? type.replaceAll("_", " ") : "";
-  $("reason").textContent = last ? `“${unquote(last.signals.reason)}”` : "";
+  const typeText = type && type !== "none" ? type.replaceAll("_", " ") : "";
+  $("scam-type").textContent = call.hungUp ? [typeText, "call ended"].filter(Boolean).join(" · ") : typeText;
+  // Claude's reason is its own words (often quoting the caller), shown as written.
+  setHtml($("reason"), last ? `<span class="claude-tag">${icon("i-sparkles")}Claude</span>${esc(last.signals.reason)}` : "");
   $("reaction").textContent =
     call.reactionMs !== null && call.reactionMs !== undefined
       ? `Alarm ${seconds(call.reactionMs)} after the triggering sentence`
       : "";
+  renderRiskChart();
 }
+
+// Risk after every scored sentence, so the audience sees the scam build up, with the
+// caution and alarm thresholds as dashed lines. Thresholds come from /api/config.
+let thresholds = { scam: 0.8, caution: 0.5 };
+
+function renderRiskChart() {
+  const box = $("risk-chart");
+  const w = box.clientWidth;
+  const h = box.clientHeight;
+  if (!call || !w || !h) return;
+  const pad = 5;
+  // The threshold labels sit right of the plot, so the line never runs into them.
+  const labels = Math.max($("th-scam").offsetWidth, $("th-caution").offsetWidth) + 10;
+  const plotW = w - labels;
+  const scores = call.scores;
+  const slots = Math.max(scores.length, 12); // early in the call the line grows from the left
+  const x = (i) => pad + (i / (slots - 1)) * (plotW - 2 * pad);
+  const y = (risk) => pad + (1 - risk) * (h - 2 * pad);
+  const f = (n) => n.toFixed(1);
+  const points = scores.map((score, i) => [x(i), y(score.signals.risk)]);
+  const line = points.map(([px, py], i) => `${i ? "L" : "M"}${f(px)} ${f(py)}`).join("");
+  const stops = [
+    [0, "--safe"],
+    [thresholds.caution - 0.04, "--safe"],
+    [thresholds.caution, "--caution"],
+    [thresholds.scam - 0.04, "--caution"],
+    [thresholds.scam, "--scam"],
+    [1, "--scam"],
+  ]
+    .map(([offset, color]) => `<stop offset="${offset}" style="stop-color: var(${color})"/>`)
+    .join("");
+  let svg = `<defs><linearGradient id="risk-grad" gradientUnits="userSpaceOnUse" x1="0" y1="${f(y(0))}" x2="0" y2="${f(y(1))}">${stops}</linearGradient></defs>`;
+  for (const [key, color] of [["scam", "#fca5a5"], ["caution", "#fcd34d"]]) {
+    svg += `<line class="th-line" x1="0" x2="${f(plotW)}" y1="${f(y(thresholds[key]))}" y2="${f(y(thresholds[key]))}" stroke="${color}" stroke-opacity="0.55"/>`;
+  }
+  if (points.length) {
+    const last = points.at(-1);
+    const alarmAt = scores.findIndex((score) => score.level === "scam");
+    svg += `<path d="${line}L${f(last[0])} ${f(y(0))}L${f(points[0][0])} ${f(y(0))}Z" fill="url(#risk-grad)" opacity="0.18"/>`;
+    svg += `<path class="risk-line" d="${line}" stroke="url(#risk-grad)"/>`;
+    if (alarmAt >= 0) svg += `<line class="alarm-mark" x1="${f(x(alarmAt))}" x2="${f(x(alarmAt))}" y1="0" y2="${h}"/>`;
+    svg += `<circle class="risk-dot" cx="${f(last[0])}" cy="${f(last[1])}" r="5" style="fill: var(--level)"/>`;
+  }
+  setHtml($("risk-svg"), svg);
+  $("th-scam").style.top = `${y(thresholds.scam)}px`;
+  $("th-caution").style.top = `${y(thresholds.caution)}px`;
+  $("risk-empty").hidden = points.length > 0;
+}
+new ResizeObserver(() => requestAnimationFrame(renderRiskChart)).observe(document.getElementById("risk-chart"));
 
 // Two people on a call: once one of them is the Caller, everyone else is the
 // Receiver, whatever role the line arrived with. Until then "Speaker N" by first
@@ -197,37 +275,156 @@ function speakerName(speakerId) {
 }
 
 const IDLE = `<li class="idle">
-  <div>Waiting for a call. Press <b>Listen</b>, or pick a replay.</div>
-  <div class="pipeline">
-    <span class="node">Microphone</span><span>→</span>
-    <span class="node">Reson8 speech-to-text</span><span>→</span>
-    <span class="node">Claude reads every sentence</span><span>→</span>
-    <span class="node">Receiver &amp; trusted contact</span>
+  <div class="hero">
+    <svg class="hero-logo" viewBox="0 0 32 32" aria-hidden="true"><use href="#logo"/></svg>
+    <div>
+      <div class="hero-title">A guardian angel on the line</div>
+      <div class="hero-sub">Schutzengel listens to the call on speakerphone. Claude reads every sentence and steps in before the money leaves the house.</div>
+    </div>
   </div>
-  <div class="idle-hint">Speakers show as "Speaker 1 / 2" until Claude works out who is calling.</div>
+  <div class="pipeline">
+    <div class="node">${icon("i-mic")}<b>Microphone</b>the call on speaker</div>
+    ${icon("i-arrow", "icon arrow")}
+    <div class="node">${icon("i-audio")}<b>Reson8</b>live speech-to-text, two voices</div>
+    ${icon("i-arrow", "icon arrow")}
+    <div class="node claude">${icon("i-sparkles")}<b>Claude</b>reads every sentence, spots the scam</div>
+    ${icon("i-arrow", "icon arrow")}
+    <div class="node">${icon("i-shield-check")}<b>Receiver &amp; trusted contact</b>warned within seconds</div>
+  </div>
+  <div class="idle-hint"><span class="pulse-dot"></span><span>Waiting for a call<span class="op">: press <b>Listen</b>, or pick a replay</span>. Claude also works out who is calling, whoever speaks first.</span></div>
 </li>`;
+
+const TAG_ICON = { claims_authority: "i-landmark", asks_money: "i-banknote", pressure: "i-timer", secrecy: "i-lock", caution: "i-alert", alarm: "i-siren" };
+
+// The label keeps its colon for copy and screen readers ("Caller: ..."); the bubble hides it.
+const bubble = (name, text) =>
+  `<div class="bubble"><span class="who">${name}<span class="sr">:</span></span><span class="text">${esc(text)}</span></div>`;
+const tagsHtml = (tags) =>
+  tags.length
+    ? `<div class="tags">${tags.map((t) => `<span class="tag tag-${t.kind}">${icon(TAG_ICON[t.kind])}${esc(t.label)}${t.time ? ` · <span class="tag-time">${esc(t.time)}</span>` : ""}</span>`).join("")}</div>`
+    : "";
+
+// Which line set off what: the first score that lit each warning sign, turned the
+// call amber, or raised the alarm. A score covers the call up to its segment, so the
+// tag goes on the caller's line at or before it.
+function lineTags() {
+  const tags = new Map();
+  const add = (score, tag) => {
+    if (!score) return;
+    const id = anchorLine(score.segmentId);
+    if (id === null) return;
+    if (!tags.has(id)) tags.set(id, []);
+    tags.get(id).push(tag);
+  };
+  for (const [key, name] of SIGNALS) add(call.scores.find((s) => s.signals[key] >= LIT_AT), { kind: key, label: name });
+  const firstRisky = call.scores.find((s) => s.level !== "safe");
+  if (firstRisky?.level === "caution") add(firstRisky, { kind: "caution", label: "Caution" });
+  const time = call.reactionMs !== null && call.reactionMs !== undefined ? seconds(call.reactionMs) : "";
+  add(call.scores.find((s) => s.level === "scam"), { kind: "alarm", label: "Alarm", time });
+  return tags;
+}
+
+function anchorLine(segmentId) {
+  const index = call.segments.findIndex((s) => s.id === segmentId);
+  if (index < 0) return null;
+  for (let i = index; i >= 0; i--) {
+    if (speakerName(call.segments[i].speakerId).role === "caller") return call.segments[i].id;
+  }
+  return segmentId;
+}
+
+// Lines are kept and patched rather than redrawn, so a new line can slide in and a
+// relabelled one can flash without the rest of the transcript flickering.
+const rendered = new Map(); // segment id -> { li, sig, role }
+let transcriptFor = null;
 
 function renderTranscript() {
   const list = $("transcript");
-  const line = (speakerId, text, extra = "") => {
-    const { role, name } = speakerName(speakerId);
-    return `<li class="${role}${extra}"><span class="who">${name}:</span>${esc(text)}</li>`;
-  };
-  const lines = call.segments.map((s) => line(s.speakerId, s.text));
-  if (interim?.text) lines.push(line(interim.speakerId, interim.text, " interim"));
-  list.innerHTML = lines.length ? lines.join("") : IDLE;
-  list.scrollTop = list.scrollHeight;
+  if (transcriptFor !== call.id) {
+    transcriptFor = call.id;
+    rendered.clear();
+    list.innerHTML = "";
+  }
+  if (!call.segments.length && !interim?.text) {
+    if (!list.querySelector(".idle")) {
+      list.innerHTML = IDLE;
+      rendered.clear();
+    }
+    return;
+  }
+  list.querySelector(".idle")?.remove();
+  const stick = list.scrollHeight - list.scrollTop - list.clientHeight < 120;
+  const tags = lineTags();
+  let interimLi = list.querySelector(":scope > li.interim");
+  let added = false;
+  for (const segment of call.segments) {
+    const { role, name } = speakerName(segment.speakerId);
+    const lineTagList = tags.get(segment.id) ?? [];
+    const sig = `${role}|${name}|${lineTagList.map((t) => t.kind + t.label + (t.time ?? "")).join()}`;
+    let entry = rendered.get(segment.id);
+    if (!entry) {
+      entry = { li: document.createElement("li"), sig: null, role: null };
+      list.insertBefore(entry.li, interimLi);
+      rendered.set(segment.id, entry);
+      added = true;
+    }
+    if (entry.sig === sig) continue;
+    const relabel = entry.role !== null && entry.role !== role;
+    entry.li.className = `msg ${role}${entry.sig === null ? " enter" : ""}${relabel ? " relabel" : ""}`;
+    entry.li.innerHTML = bubble(name, segment.text) + tagsHtml(lineTagList);
+    entry.sig = sig;
+    entry.role = role;
+  }
+  if (interim?.text) {
+    const { role, name } = speakerName(interim.speakerId);
+    if (!interimLi) {
+      interimLi = document.createElement("li");
+      list.appendChild(interimLi);
+      added = true;
+    }
+    interimLi.className = `msg ${role} interim`;
+    interimLi.innerHTML = bubble(name, interim.text);
+  } else {
+    interimLi?.remove();
+  }
+  if (added || stick) list.scrollTop = list.scrollHeight;
+}
+
+// The receiver's phone: a lock screen before the call, the call screen while it is
+// safe (amber banner on caution), a full red takeover on scam, "Call ended" after.
+function phoneMode() {
+  if (call.hungUp) return "ended";
+  if (call.level === "scam") return "alert";
+  return call.segments.length ? "call" : "lock";
 }
 
 function renderPhone() {
-  $("phone").className = `phone phone-${call.level}`;
+  $("phone").className = `phone phone-${call.level} ${phoneMode()}`;
   $("phone-label").textContent = { safe: "Protected", caution: "Be careful", scam: "SCAM CALL" }[call.level];
   const text = call.level === "scam" ? (call.warning ?? "") : call.level === "caution" ? "This call has warning signs." : "";
   if ($("phone-warning").textContent !== text) $("phone-warning").textContent = text;
+  $("ended-note").textContent = call.level === "scam" ? "Well done for hanging up. This was a scam call." : "";
+  renderClock();
   fitPhone();
 }
 
-// The warning starts large and shrinks 1 px at a time until it fits between the
+// Phone clock, lock screen and call timer; ticks every second.
+function renderClock() {
+  const now = new Date();
+  const time = `${two(now.getHours())}:${two(now.getMinutes())}`;
+  $("phone-clock").textContent = time;
+  $("lock-time").textContent = time;
+  $("lock-date").textContent = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  if (!call) return;
+  const start = call.segments[0]?.at;
+  const end = call.hungUp ? (call.hungUpAt ?? call.segments.at(-1)?.at ?? Date.now()) : Date.now();
+  const elapsed = start ? duration(end - start) : "00:00";
+  $("phone-timer").textContent = elapsed;
+  $("ended-duration").textContent = elapsed;
+}
+setInterval(renderClock, 1000);
+
+// The scam warning starts large and shrinks 1 px at a time until it fits between the
 // label and the "Hang up" bar, never below 11 px. Re-run when the phone resizes.
 const MIN_WARNING_PX = 11;
 function fitPhone() {
@@ -235,12 +432,11 @@ function fitPhone() {
   const body = $("phone-body");
   const text = $("phone-warning");
   phone.style.setProperty("--pw", `${phone.clientWidth}px`);
-  if (!text.textContent) {
+  if (!text.textContent || !phone.classList.contains("phone-scam")) {
     text.style.fontSize = "";
     return;
   }
-  const isScam = phone.classList.contains("phone-scam");
-  let size = Math.max(MIN_WARNING_PX, Math.min(isScam ? 40 : 20, Math.floor(body.clientWidth / 7)));
+  let size = Math.max(MIN_WARNING_PX, Math.min(40, Math.floor(body.clientWidth / 7)));
   text.style.fontSize = `${size}px`;
   while (size > MIN_WARNING_PX && (body.scrollHeight > body.clientHeight + 1 || body.scrollWidth > body.clientWidth + 1)) {
     size -= 1;
@@ -249,29 +445,45 @@ function fitPhone() {
 }
 new ResizeObserver(() => requestAnimationFrame(fitPhone)).observe(document.getElementById("phone"));
 
+// Rows are built once and then updated, so the bars grow instead of jumping.
 function renderSignals() {
+  const box = $("signals");
+  if (!box.children.length) {
+    box.innerHTML = SIGNALS.map(
+      ([key, name, iconId]) =>
+        `<div class="signal" data-key="${key}"><span class="sig-icon">${icon(iconId, "")}</span><span class="name">${name}</span><span class="bar-bg"><span class="bar-fg"></span></span><span class="num"></span><span class="note"></span></div>`,
+    ).join("");
+  }
   const last = call.scores.at(-1);
-  $("signals").innerHTML = SIGNALS.map(([key, name]) => {
+  for (const [key, , , hint] of SIGNALS) {
+    const row = box.querySelector(`[data-key="${key}"]`);
     const value = last?.signals[key] ?? 0;
     // The quote stays with the score that first lit the signal, so the story builds up.
     const first = call.scores.find((s) => s.signals[key] >= LIT_AT);
-    return `<div class="signal${first ? " lit" : ""}">
-      <span class="name">${name}</span>
-      <span class="bar-bg"><span class="bar-fg" style="width:${Math.round(value * 100)}%"></span></span>
-      <span class="num">${value.toFixed(2)}</span>
-      ${first ? `<span class="quote">${esc(unquote(first.signals.reason))}</span>` : ""}
-    </div>`;
-  }).join("");
+    const wasLit = row.classList.contains("lit");
+    row.classList.toggle("lit", Boolean(first));
+    // Pop only when the newest score lit it, not when a dashboard joins mid-call.
+    if (first && !wasLit && first === last) {
+      row.classList.remove("pop");
+      void row.offsetWidth;
+      row.classList.add("pop");
+    }
+    row.querySelector(".bar-fg").style.width = `${Math.round(value * 100)}%`;
+    row.querySelector(".num").textContent = pct(value);
+    const note = row.querySelector(".note");
+    note.className = first ? "note quote" : "note hint";
+    note.textContent = first ? first.signals.reason : hint;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // "Claude acts": four steps derived from the call state.
 
 const STEPS = [
-  ["alarm", "Alarm"],
-  ["contact", "Trusted contact alerted"],
-  ["report", "Police report"],
-  ["police", "Call 110?"],
+  ["alarm", "Alarm", "i-bell"],
+  ["contact", "Trusted contact alerted", "i-send"],
+  ["report", "Police report", "i-file"],
+  ["police", "Call 110?", "i-phone"],
 ];
 
 const toolTimes = (tool) => call.agent.steps.filter((s) => s.kind === "tool" && s.tool === tool).map((s) => s.at);
@@ -318,38 +530,45 @@ function visibleStep(states) {
 }
 
 function approvalButtons() {
-  return `<div class="buttons"><button class="approve" data-approve="true">Approve</button><button data-approve="false">Decline</button></div>`;
+  return `<div class="buttons"><button class="approve" data-approve="true">${icon("i-check")}Approve</button><button data-approve="false">Decline</button></div>`;
 }
 
 function renderTracker(states) {
   const shown = visibleStep(states);
-  $("tracker").innerHTML = STEPS.map(([key, title], index) => {
+  const html = STEPS.map(([key, title, iconId], index) => {
     const { state, sub } = states[key];
-    const mark = state === "done" ? "✓" : state === "pending" ? "!" : state === "active" ? "" : String(index + 1);
+    const mark = state === "done" ? icon("i-check") : state === "pending" ? "!" : state === "active" ? "" : String(index + 1);
     return `<li class="step ${state}${key === shown ? " selected" : ""}" data-step="${key}">
       <span class="mark">${mark}</span>
-      <span class="title">${title}</span>
+      <span class="title">${icon(iconId, "icon step-icon")}${title}</span>
       <span class="sub">${esc(sub)}</span>
       ${state === "pending" ? approvalButtons() : ""}
     </li>`;
   }).join("");
+  setHtml($("tracker"), html);
 }
 
+// Each detail starts with its heading text (no leading whitespace): tests and the
+// presenter read it as the step's title.
 function renderDetails(key) {
-  const box = $("details");
+  let html;
   if (key === "alarm") {
     const last = call.scores.find((s) => s.level === "scam") ?? call.scores.at(-1);
-    box.innerHTML = `<h3>Warning on the receiver's screen</h3>
-      <div class="warning-text">${esc(call.warning)}</div>
-      <div class="note">Alarm tone ${seconds(call.reactionMs)} after the sentence${last ? ` · Claude: “${esc(unquote(last.signals.reason))}”` : ""}</div>`;
+    html =
+      `<h3>${icon("i-bell")}Warning on the receiver's screen</h3>` +
+      `<div class="warning-text">${esc(call.warning)}</div>` +
+      `<div class="note">Alarm tone ${seconds(call.reactionMs)} after the sentence${last ? ` · Claude: ${esc(last.signals.reason)}` : ""}</div>`;
   } else if (key === "contact") {
     const family = call.family;
-    box.innerHTML = `<h3>Message to the trusted contact: “Scam call in progress”</h3>
-      <div>${esc(family.summary)}</div>
-      ${family.quotes.length ? `<ul class="quotes">${family.quotes.map((q) => `<li>“${esc(unquote(q))}”</li>`).join("")}</ul>` : ""}
-      <div class="note">${family.delivered ? "Push notification delivered" : "Shown on this dashboard (no push channel in this demo)"}</div>`;
+    html =
+      `<h3>${icon("i-send")}Message to the trusted contact: “Scam call in progress”</h3>` +
+      `<div class="notif"><div class="notif-app"><svg viewBox="0 0 32 32" aria-hidden="true"><use href="#logo"/></svg>Schutzengel<span class="when">${esc(clock(toolTimes("notify_trusted_contact")[0]))}</span></div>` +
+      `<div class="notif-title">Scam call in progress</div><div>${esc(family.summary)}</div>` +
+      (family.quotes.length ? `<ul class="quotes">${family.quotes.map((q) => `<li>“${esc(unquote(q))}”</li>`).join("")}</ul>` : "") +
+      `</div><div class="note">${family.delivered ? "Push notification delivered" : "Shown on this dashboard (no push channel in this demo)"}</div>`;
   } else if (key === "report") {
     const report = call.report;
+    const drafts = toolTimes("draft_police_report");
     const rows = [
       ["Summary", report.summary],
       ["Claimed to be", report.caller_claimed_identity],
@@ -358,34 +577,46 @@ function renderDetails(key) {
       ["Handover", report.handover_details],
       ["Scam type", report.scam_type],
     ];
-    box.innerHTML = `<h3>Police report (draft)</h3>
-      <dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
-      <ul class="quotes">${report.key_quotes.map((q) => `<li>“${esc(unquote(q))}”</li>`).join("")}</ul>`;
+    html =
+      `<h3>${icon("i-file")}Police report (draft)</h3>` +
+      `<div class="report-doc"><span class="stamp">DRAFT</span>` +
+      `<div class="doc-head">Phone scam attempt · ${drafts.length > 1 ? "updated" : "drafted"} ${esc(clock(drafts.at(-1)))} · from the transcript only</div>` +
+      `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` +
+      `<ul class="quotes">${report.key_quotes.map((q) => `<li>“${esc(unquote(q))}”</li>`).join("")}</ul></div>`;
   } else if (key === "police") {
     const approval = call.approval;
     const head = { pending: "Call the police (110)?", approved: "Approved: calling 110", declined: "Declined: police not called" }[approval.status];
-    box.innerHTML = `<h3>${head}</h3>
-      <div>${esc(approval.reason)}</div>
-      <div class="evidence">“${esc(unquote(approval.evidence))}”</div>
-      ${approval.status === "pending" ? approvalButtons() : ""}
-      <div class="note">${approval.status === "approved" ? "Simulated in this demo: nothing is dialled." : "Nothing is dialled until a human approves."}</div>`;
+    html =
+      `<h3>${icon("i-phone")}${head}</h3>` +
+      `<div class="ask${approval.status === "pending" ? "" : " decided"}"><div>${esc(approval.reason)}</div>` +
+      `<div class="evidence">“${esc(unquote(approval.evidence))}”</div>` +
+      (approval.status === "pending" ? approvalButtons() : "") +
+      `<div class="note">${approval.status === "approved" ? "Simulated in this demo: nothing is dialled." : "Nothing is dialled until a human approves."}</div></div>`;
   } else {
-    box.innerHTML = `<p class="muted">When a call turns into a scam, Claude sounds the alarm, alerts the trusted contact, drafts a police report and asks a human before calling 110. Each step appears here.</p>`;
+    html =
+      `<div class="details-empty"><p>When a call turns into a scam, Claude sounds the alarm, alerts the trusted contact, drafts a police report and asks a human before calling 110. Each step appears here.</p>` +
+      `<div class="promises"><span>${icon("i-zap")}Alarm seconds after the sentence</span><span>${icon("i-users")}The trusted contact gets the caller's words</span><span>${icon("i-check")}A human approves any police call</span></div></div>`;
   }
+  setHtml($("details"), html);
 }
+
+const AGENT_STATUS = { idle: "standing by", running: "working…", done: "done", error: "error" };
 
 function renderAgentLog() {
   const pill = $("agent-status");
-  pill.textContent = call.agent.status;
+  pill.textContent = AGENT_STATUS[call.agent.status] ?? call.agent.status;
   pill.className = `pill ${call.agent.status}`;
-  $("agent-steps").innerHTML =
+  // The time is drawn from data-time by CSS, so each entry still starts with its tool name.
+  const html =
     call.agent.steps
       .map((step) => {
-        if (step.kind === "tool") return `<li><span class="tool">${esc(step.tool)}</span>${esc(step.detail)}</li>`;
-        if (step.kind === "error") return `<li class="error">Error: ${esc(step.detail)}</li>`;
-        return `<li class="muted">${esc(step.detail)}</li>`;
+        const time = `data-time="${esc(clock(step.at))}"`;
+        if (step.kind === "tool") return `<li ${time}><span class="tool">${esc(step.tool)}</span>${esc(step.detail)}</li>`;
+        if (step.kind === "error") return `<li ${time} class="error">Error: ${esc(step.detail)}</li>`;
+        return `<li ${time} class="muted">${esc(step.detail)}</li>`;
       })
       .join("") || `<li class="muted">Starts automatically when a scam is detected.</li>`;
+  if (setHtml($("agent-steps"), html)) $("agent-log").scrollTop = $("agent-log").scrollHeight;
 }
 
 const median = (values) => {
@@ -402,7 +633,8 @@ function renderMetrics() {
 }
 
 function renderScreens() {
-  $("screens").textContent = `${screens} screen${screens === 1 ? "" : "s"} connected${loadedBuild ? ` · build ${loadedBuild.slice(-4)}` : ""}`;
+  const phoneText = phones ? ` · ${phones} phone${phones === 1 ? "" : "s"}` : "";
+  $("screens").textContent = `${screens} screen${screens === 1 ? "" : "s"} connected${phoneText}${loadedBuild ? ` · build ${loadedBuild.slice(-4)}` : ""}`;
   $("screens-tile").classList.toggle("warn", screens > 1);
 }
 
@@ -467,10 +699,20 @@ function playAlarm() {
   micGateUntil = performance.now() + PULSES.length * (PULSE_S + GAP_S) * 1000 + GATE_TAIL_MS;
 }
 
+// One red flash across the screen with the alarm, also when the sound is off.
+function flashAlarm() {
+  const flash = $("flash");
+  flash.classList.remove("go");
+  void flash.offsetWidth;
+  flash.classList.add("go");
+}
+
 function alarmOnce() {
   if (alarmPlayedFor === call.id) return;
   alarmPlayedFor = call.id;
+  flashAlarm();
   playAlarm();
+  if (PHONE_VIEW) navigator.vibrate?.([400, 150, 400, 150, 400]);
 }
 
 const micGated = () => performance.now() < micGateUntil;
@@ -517,6 +759,7 @@ const mic = {
   speechMs: 0,
   ignoreUntilFlush: null,
   flushCount: 0,
+  level: 0, // latest frame RMS, for the level meter in the header
 };
 
 function flush(id = `f${++mic.flushCount}`) {
@@ -620,7 +863,10 @@ async function startListening() {
     await mic.context.resume();
     const source = mic.context.createMediaStreamSource(mic.stream);
     const worklet = new AudioWorkletNode(mic.context, "pcm16-processor");
-    worklet.port.onmessage = (e) => onFrame(e.data.frame, e.data.rms);
+    worklet.port.onmessage = (e) => {
+      mic.level = e.data.rms;
+      onFrame(e.data.frame, e.data.rms);
+    };
     // A silent path to the speakers keeps the graph running without feedback.
     const mute = mic.context.createGain();
     mute.gain.value = 0;
@@ -667,8 +913,20 @@ function showListenError(text) {
 
 function renderListening(pending) {
   $("live").hidden = !mic.active || Boolean(pending);
-  $("listen").textContent = pending ?? (mic.active ? "Stop listening" : "Listen");
+  $("listen").querySelector(".label").textContent = pending ?? (mic.active ? "Stop listening" : "Listen");
   $("listen").classList.toggle("on", mic.active);
+  if (mic.active && !pending && vuFrame === null) vuFrame = requestAnimationFrame(vuLoop);
+}
+
+// Level meter next to LISTENING: shows the room is being heard, flat while the alarm tone gates the mic.
+const VU_SHAPE = [0.55, 0.85, 1, 0.75, 0.5];
+let vuLevel = 0;
+let vuFrame = null;
+function vuLoop() {
+  const target = mic.active && !micGated() ? Math.min(1, Math.sqrt(Math.max(0, mic.level - mic.noiseFloor)) * 5) : 0;
+  vuLevel += (target - vuLevel) * 0.3;
+  [...$("vu").children].forEach((bar, i) => (bar.style.transform = `scaleY(${Math.max(0.12, vuLevel * VU_SHAPE[i]).toFixed(3)})`));
+  vuFrame = mic.active ? requestAnimationFrame(vuLoop) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -681,6 +939,79 @@ async function post(path, body = {}) {
     body: JSON.stringify(body),
   });
   return res;
+}
+
+async function decide(approve) {
+  if (call?.approval?.status !== "pending") return;
+  const res = await post(`/api/approval/${call.approval.id}`, { approve });
+  if (res.status === 409) toast("Already decided: the first decision stands.");
+}
+
+function selectStep(key) {
+  if (!call || !["done", "pending"].includes(stepStates()[key].state)) return;
+  selectedStep = key;
+  render();
+}
+
+// Presenter mode hides the operator controls (only Listen and New call stay) and is
+// remembered per browser; ?presenter=1 or ?presenter=0 in the URL sets it too.
+const PRESENTER_KEY = "schutzengel-presenter";
+const isPresenter = () => document.documentElement.classList.contains("presenter");
+
+function setPresenter(on) {
+  document.documentElement.classList.toggle("presenter", on);
+  $("mode").setAttribute("aria-pressed", String(on));
+  $("mode").title = on ? "Show the operator controls (P)" : "Presenter mode: hide the operator controls (P)";
+  try {
+    localStorage.setItem(PRESENTER_KEY, on ? "1" : "0");
+  } catch {
+    // storage blocked: the mode just isn't remembered
+  }
+}
+
+function initPresenter() {
+  let on = false;
+  try {
+    on = localStorage.getItem(PRESENTER_KEY) === "1";
+  } catch {
+    // storage blocked
+  }
+  const param = new URLSearchParams(location.search).get("presenter");
+  if (param !== null) on = param !== "0";
+  setPresenter(on);
+}
+
+const OVERLAYS = ["eval-view", "help"];
+function toggleOverlay(id, open = $(id).hidden) {
+  for (const other of OVERLAYS) $(other).hidden = other !== id || !open;
+}
+const closeOverlays = () => OVERLAYS.forEach((id) => ($(id).hidden = true));
+
+// Single keys for the presenter, so the demo needs no mouse (see the ? overlay).
+const STEP_KEYS = { 1: "alarm", 2: "contact", 3: "report", 4: "police" };
+const KEYS = {
+  l: () => $("listen").click(),
+  n: () => $("reset").click(),
+  h: () => $("hangup").click(),
+  w: () => $("swap").click(),
+  s: () => $("sound").click(),
+  r: () => $("replay").click(),
+  a: () => decide(true),
+  d: () => decide(false),
+  e: () => toggleOverlay("eval-view"),
+  p: () => setPresenter(!isPresenter()),
+  "?": () => toggleOverlay("help"),
+  Escape: closeOverlays,
+};
+
+function onKey(e) {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+  if (e.target instanceof Element && e.target.closest("input, select, textarea")) return;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const action = STEP_KEYS[key] ? () => selectStep(STEP_KEYS[key]) : KEYS[key];
+  if (!action) return;
+  e.preventDefault();
+  action();
 }
 
 function wireControls() {
@@ -699,7 +1030,8 @@ function wireControls() {
   $("swap").onclick = () => post("/api/roles/swap");
   $("sound").onclick = () => {
     soundOn = !soundOn;
-    $("sound").textContent = soundOn ? "Sound on" : "Sound off";
+    $("sound").querySelector(".label").textContent = soundOn ? "Sound on" : "Sound off";
+    $("sound").querySelector("use").setAttribute("href", soundOn ? "#i-volume" : "#i-volume-x");
     $("sound").setAttribute("aria-pressed", String(soundOn));
     if (soundOn) unlockSound();
   };
@@ -709,19 +1041,43 @@ function wireControls() {
     const res = await post("/api/replay", { id: $("script").value });
     if (!res.ok) toast("Replay not found");
   };
+  // The picker would swallow the shortcut keys while it has focus.
+  $("script").onchange = () => $("script").blur();
+  $("mode").onclick = () => setPresenter(!isPresenter());
+  $("eval").onclick = () => toggleOverlay("eval-view", true);
+  $("eval").onkeydown = (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    toggleOverlay("eval-view", true);
+  };
+  for (const id of OVERLAYS) {
+    $(id).addEventListener("click", (e) => {
+      if (e.target === e.currentTarget || e.target.closest("[data-close]")) toggleOverlay(id, false);
+    });
+  }
   // Approve / Decline live in the tracker and in the details; steps are clickable.
-  document.addEventListener("click", async (e) => {
+  document.addEventListener("click", (e) => {
     const button = e.target.closest("button[data-approve]");
-    if (button && call?.approval) {
-      const res = await post(`/api/approval/${call.approval.id}`, { approve: button.dataset.approve === "true" });
-      if (res.status === 409) toast("Already decided: the first decision stands.");
-      return;
-    }
+    if (button) return void decide(button.dataset.approve === "true");
     const step = e.target.closest("#tracker .step.done, #tracker .step.pending");
-    if (step && call) {
-      selectedStep = step.dataset.step;
-      render();
-    }
+    if (step) selectStep(step.dataset.step);
+  });
+  document.addEventListener("keydown", onKey);
+}
+
+// The phone view only shows the receiver's screen: one tap arms the alarm sound (phones
+// only allow audio after a touch), and "Hang up" on the scam warning really ends the call.
+// The small red button of the call screen does nothing: it sits under the thumb of
+// whoever holds the phone, and an accidental tap would end the demo call.
+function wirePhone() {
+  document.documentElement.classList.add("view-phone");
+  $("arm").hidden = false;
+  $("arm").addEventListener("click", () => {
+    unlockSound();
+    $("arm").hidden = true;
+  });
+  $("phone").addEventListener("click", (e) => {
+    if (e.target.closest(".phone-hangup")) void post("/api/hangup");
   });
 }
 
@@ -733,16 +1089,28 @@ async function loadScripts() {
   if (scripts.some((s) => s.id === "scam-fake-police")) $("script").value = "scam-fake-police";
 }
 
+// "claude-opus-5-5" -> "Opus 5.5" for the footer chip.
+const modelName = (id) => {
+  const match = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?!\d)/.exec(id ?? "");
+  return match ? `${match[1][0].toUpperCase()}${match[1].slice(1)} ${match[2]}${match[3] ? `.${match[3]}` : ""}` : "";
+};
+
 async function loadReadiness() {
   const config = await (await fetch("/api/config")).json();
-  const chip = (ok, name) => `<span class="chip ${ok ? "ok" : "bad"}">${name}</span>`;
-  $("ready").innerHTML = chip(config.reson8, "Reson8") + chip(config.anthropic, "Claude");
+  const chip = (ok, name) => `<span class="chip ${ok ? "ok" : "bad"}">${esc(name)}</span>`;
+  $("ready").innerHTML = chip(config.reson8, "Reson8") + chip(config.anthropic, ["Claude", modelName(config.scorerModel)].filter(Boolean).join(" "));
   // A page newer than the server process: labels and events may not match.
   $("server-banner").hidden = (config.protocol ?? 0) >= EXPECTED_PROTOCOL;
   $("ready").title = `scorer ${config.scorerModel}, agent ${config.agentModel}, language ${config.language}`;
+  if (typeof config.scamThreshold === "number" && typeof config.cautionThreshold === "number") {
+    thresholds = { scam: config.scamThreshold, caution: config.cautionThreshold };
+    renderRiskChart();
+  }
 }
 
 // The eval scoreboard comes from `npm run eval`; no file means no tile.
+let evalResults = null;
+
 async function loadEval() {
   try {
     const res = await fetch("/eval-results.json", { cache: "no-store" });
@@ -766,25 +1134,94 @@ async function loadEval() {
     const roles = run.rolesFinal ? ` · caller identified ${run.rolesFinal.correct}/${run.rolesFinal.total}` : "";
     // On small screens only the headline stays; the rest is hidden by CSS.
     $("eval-text").innerHTML =
-      esc(`caught ${run.detected}/${run.scams} scams`) +
+      `caught <b>${esc(`${run.detected}/${run.scams}`)}</b> scams` +
       `<span class="eval-extra">${esc(demand)}</span>` +
-      esc(` · false alarms ${run.falseAlarms}/${run.normals}`) +
+      ` · false alarms <b>${esc(`${run.falseAlarms}/${run.normals}`)}</b>` +
       `<span class="eval-extra">${esc(lead)}</span>` +
       esc(` · p50 ${seconds(run.latencyP50)}`) +
       `<span class="eval-roles">${esc(roles)}</span>`;
-    $("eval").title = `${run.dataset}, ${run.mode} transcript, ${results.model}, ${results.generatedAt}`;
+    $("eval").title = `${run.dataset}, ${run.mode} transcript, ${results.model}, ${results.generatedAt}. Click or press E for the full evaluation.`;
     $("eval").hidden = false;
+    evalResults = results;
   } catch {
     $("eval").hidden = true;
+    evalResults = null;
   }
+  renderEvalView();
+}
+
+const leadText = (lead) => {
+  if (lead === null || lead === undefined) return "–";
+  if (lead === 0) return "on the money request";
+  const turns = `${Math.abs(lead)} turn${Math.abs(lead) === 1 ? "" : "s"}`;
+  return lead > 0 ? `${turns} before the money request` : `${turns} after the money request`;
+};
+
+// Full-screen evaluation (E or click the footer tile) for the tech walkthrough.
+function renderEvalView() {
+  const runs = evalResults?.runs ?? [];
+  const find = (dataset, mode) => runs.find((r) => r.dataset === dataset && r.mode === mode);
+  const pub = find("dataset", "full") ?? runs[0];
+  const head = (title, sub) =>
+    `<div class="sheet-head"><div><div class="eyebrow">Evaluation</div><h2 class="sheet-title">${title}</h2><p class="sheet-sub">${sub}</p></div><button class="ghost close" data-close>Esc</button></div>`;
+  if (!pub) {
+    setHtml($("eval-sheet"), head("No results yet", "Run <code>npm run eval</code> to replay the labelled calls through the scorer."));
+    return;
+  }
+  const calls = runs.filter((r) => r.mode === "full").reduce((sum, r) => sum + r.scams + r.normals, 0);
+  const withDemand = pub.scamsWithDemand ?? pub.scams;
+  const noDemand = pub.scams - withDemand;
+  const stats = [
+    {
+      good: true,
+      big: `${pub.detectedWithDemand ?? pub.detected}/${withDemand}`,
+      label: "scams caught that asked for money",
+      sub: `${pub.detected}/${pub.scams} of all scam calls${noDemand ? `; ${noDemand} never got to a money request` : ""}`,
+    },
+    {
+      good: pub.falseAlarms === 0,
+      big: `${pub.falseAlarms}/${pub.normals}`,
+      label: "false alarms on normal calls",
+      sub: pub.cautionOnNormal ? `${pub.cautionOnNormal}/${pub.normals} showed caution: yellow only, no warning` : "not one normal call even reached caution",
+    },
+    pub.rolesFinal && { big: `${pub.rolesFinal.correct}/${pub.rolesFinal.total}`, label: "caller identified correctly", sub: "from what is said, not from who speaks first" },
+    { big: seconds(pub.latencyP50), label: "Claude per sentence (median)", sub: `p95 ${seconds(pub.latencyP95)}` },
+  ].filter(Boolean);
+  const DATASETS = { dataset: "Public test calls", demo: "Handwritten demo calls" };
+  const MODES = { full: "whole call", caller: "caller's lines only" };
+  const rows = runs
+    .map((r) => {
+      const demand = r.scamsWithDemand !== undefined && r.scamsWithDemand < r.scams ? ` (${r.detectedWithDemand}/${r.scamsWithDemand} that asked for money)` : "";
+      return `<tr><td>${esc(DATASETS[r.dataset] ?? r.dataset)} (${r.scams + r.normals})</td><td>${esc(MODES[r.mode] ?? r.mode)}</td>` +
+        `<td class="${r.detectedWithDemand === r.scamsWithDemand ? "ok" : ""}">${r.detected}/${r.scams}${esc(demand)}</td>` +
+        `<td class="${r.falseAlarms === 0 ? "ok" : ""}">${r.falseAlarms}/${r.normals}</td><td>${esc(leadText(r.leadMedian))}</td><td>${seconds(r.latencyP50)}</td></tr>`;
+    })
+    .join("");
+  const t = evalResults.thresholds ?? thresholds;
+  const when = evalResults.generatedAt ? new Date(evalResults.generatedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  setHtml(
+    $("eval-sheet"),
+    head(`Tested on ${calls} labelled calls`, "The same Claude scorer and thresholds as the live system, replayed sentence by sentence. It never starts the agent or sends anything.") +
+      `<div class="stats">${stats.map((s) => `<div class="stat${s.good ? " good" : ""}"><div class="big">${esc(s.big)}</div><div class="lbl">${esc(s.label)}</div><div class="sub">${esc(s.sub)}</div></div>`).join("")}</div>` +
+      `<table class="runs"><thead><tr><th>Calls</th><th>Transcript</th><th>Scams caught</th><th>False alarms</th><th>Alarm vs. money request (median)</th><th>Claude p50</th></tr></thead><tbody>${rows}</tbody></table>` +
+      `<p class="caveat">The public set is synthetic, US-centric and English-only: read it as a sanity check, not real-world accuracy. ` +
+      `${esc(evalResults.model ?? "")}, effort ${esc(evalResults.effort ?? "–")}, thresholds ${esc(t.scam)} / ${esc(t.caution)}${when ? `, run ${esc(when)}` : ""}.</p>`,
+  );
 }
 
 // For the browser tests: drive the reducer and renderer directly.
 window.__schutzengel = { apply, render };
 
-wireControls();
-connect();
-void loadScripts();
-void loadReadiness();
-void loadEval();
-setInterval(loadEval, 15000);
+renderClock();
+if (PHONE_VIEW) {
+  wirePhone();
+  connect();
+} else {
+  initPresenter();
+  wireControls();
+  connect();
+  void loadScripts();
+  void loadReadiness();
+  void loadEval();
+  setInterval(loadEval, 15000);
+}

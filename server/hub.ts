@@ -117,26 +117,31 @@ function newCall(): Call {
 
 class Hub {
   private clients = new Set<Response>();
+  // Receiver phone views (/phone) get every event too, but are not dashboards.
+  private phones = new Set<Response>();
   call: Call = newCall();
 
-  attach(res: Response): void {
+  attach(res: Response, kind: "dashboard" | "phone" = "dashboard"): void {
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
     });
     this.clients.add(res);
+    if (kind === "phone") this.phones.add(res);
     res.write(`data: ${JSON.stringify(this.snapshot())}\n\n`);
     this.sendScreens();
     res.on("close", () => {
       this.clients.delete(res);
+      this.phones.delete(res);
       this.sendScreens();
     });
   }
 
   // How many dashboards are connected: a forgotten second tab becomes visible.
+  // Phone views are counted apart, so an open phone never looks like a stale tab.
   private sendScreens(): void {
-    this.send({ type: "screens", count: this.clients.size });
+    this.send({ type: "screens", count: this.clients.size - this.phones.size, phones: this.phones.size });
   }
 
   send(event: { type: string; [key: string]: unknown }): void {
@@ -145,7 +150,7 @@ class Hub {
   }
 
   snapshot() {
-    return { type: "state", call: this.call, buildId: BUILD_ID, screens: this.clients.size };
+    return { type: "state", call: this.call, buildId: BUILD_ID, screens: this.clients.size - this.phones.size, phones: this.phones.size };
   }
 
   reset(): Call {

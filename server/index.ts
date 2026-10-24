@@ -1,4 +1,5 @@
 import express from "express";
+import { networkInterfaces } from "node:os";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { BUILD_ID, hub } from "./hub.js";
@@ -10,7 +11,8 @@ const app = express();
 app.use(express.json());
 app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));
 
-app.get("/phone", (_req, res) => res.redirect("/phone.html"));
+// The receiver's screen on its own, for a real phone on the same network (optional in the demo).
+app.get("/phone", (_req, res) => res.redirect("/?view=phone"));
 
 app.get("/api/config", (_req, res) => {
   res.json({
@@ -24,10 +26,13 @@ app.get("/api/config", (_req, res) => {
     scorerModel: config.scorerModel,
     agentModel: config.agentModel,
     language: config.language,
+    // The dashboard draws these as the caution / alarm lines of the risk chart.
+    scamThreshold: config.scamThreshold,
+    cautionThreshold: config.cautionThreshold,
   });
 });
 
-app.get("/api/events", (_req, res) => hub.attach(res));
+app.get("/api/events", (req, res) => hub.attach(res, req.query.client === "phone" ? "phone" : "dashboard"));
 
 app.get("/api/reson8/session", async (_req, res) => {
   try {
@@ -75,8 +80,13 @@ app.post("/api/hangup", (_req, res) => {
 });
 
 hub.startHeartbeat();
+// The address a phone on the same Wi-Fi can open (first external IPv4).
+const lanAddress = Object.values(networkInterfaces())
+  .flat()
+  .find((net) => net?.family === "IPv4" && !net.internal)?.address;
+
 app.listen(config.port, () => {
-  console.log(`Schutzengel running:  dashboard http://localhost:${config.port}   phone http://localhost:${config.port}/phone`);
+  console.log(`Schutzengel running:  dashboard http://localhost:${config.port}   phone http://${lanAddress ?? "localhost"}:${config.port}/phone`);
   if (!config.reson8ApiKey) console.warn("RESON8_API_KEY missing: live listening is disabled (replay still works).");
   if (!config.anthropicKeySet) console.warn("ANTHROPIC_API_KEY missing: scoring and the agent will fail.");
 });

@@ -6,7 +6,7 @@ Schutzengel listens to an older person's phone call on speakerphone and transcri
 
 ## Why
 
-Every day, fake police officers, "grandchildren in trouble", fake bank fraud departments and fake tech-support agents call older people and talk them out of their savings. These scams build up over several minutes: an authority claim, then fear, then secrecy, then the request for money. By the time the victim notices, the money is gone. Schutzengel catches the scam while the call is still running.
+Every day, fake police officers, "grandchildren in trouble", fake bank fraud departments and fake tech-support agents call older people and talk them out of their savings. These scams build up over several minutes: an authority claim, then fear, then secrecy, then the request for money. By the time the victim notices, the money is gone. In 2025, fake police officers alone took 49.5 million euros from people in Germany, up from 30.1 million the year before, and shock calls and the grandchild trick about 49 million more, counting only reported cases (BKA crime statistics, [reported by dpa](https://www.t-online.de/nachrichten/panorama/kriminalitaet/id_101376512/schaden-durch-falsche-polizisten-stark-gestiegen.html)). Schutzengel catches the scam while the call is still running.
 
 ## How it works
 
@@ -42,14 +42,17 @@ Phone call on speaker → laptop microphone
   - [x] Replay of scripted calls through the real pipeline, with no microphone needed
 - **Dashboard** (`public/`, one page, no build step):
   - [x] Live listening: laptop mic → AudioWorklet (16 kHz PCM16) → Reson8. After ~600 ms of silence the page flushes Reson8, so each sentence lands about 1 s after it is spoken, split by speaker.
-  - [x] Story layout on one screen (fits 1920×1080 and 1280×720):
-    - a **status bar** (level, risk, scam type, Claude's quote, reaction time)
-    - the **transcript** ("Speaker 1/2" until Claude identifies the caller, then Caller / Receiver with a "Caller identified" note; Swap speakers is a manual override)
-    - a **phone mockup of the receiver's screen** (Protected / Be careful / scam warning) next to the four **warning signs** with Claude's quotes
-    - a **"Claude acts" tracker**: Alarm → Trusted contact alerted → Police report → Call 110? (Approve / Decline), with the selected step's details and the agent log below
-  - [x] One short **alarm tone** per scam call (no speech). The mic is muted towards Reson8 for the ~1.8 s of the tone, so the laptop doesn't transcribe itself. The Sound on/off toggle silences it.
+  - [x] Story layout on one screen (fits every size from 1280×720 to 2560×1440 without scrolling):
+    - a **status bar**: level, risk in %, a **risk-over-time line** (one point per sentence, with the caution and alarm thresholds dashed and the alarm moment marked), scam type, Claude's reason, reaction time
+    - the **transcript** as a conversation: the caller on the left, the receiver on the right ("Speaker 1/2" until Claude identifies the caller, then Caller / Receiver with a "Caller identified" note; Swap speakers is a manual override). **Evidence tags** mark the exact line that lit each warning sign, turned the call amber and raised the alarm (with the reaction time)
+    - the **receiver's phone**, drawn as a real phone: lock screen with "Protected" before the call, the call screen with a running timer, an amber "Be careful" banner on caution, the full red warning on scam, and "Call ended" after Hang up. Next to it the four **warning signs**: what each one means until Claude finds it, then Claude's evidence
+    - a **"Claude acts" tracker**: Alarm → Trusted contact alerted → Police report → Call 110? (Approve / Decline). The selected step shows as a push notification to the trusted contact, a police-report document, or the 110 request; the agent's tool calls are logged with times beside it
+  - [x] One short **alarm tone** per scam call (no speech), plus one red flash around the screen. The mic is muted towards Reson8 for the ~1.8 s of the tone, so the laptop doesn't transcribe itself. The Sound on/off toggle silences the tone. A level meter next to LISTENING shows the room is being heard
+  - [x] **Presenter mode** (P): hides the operator controls, so the header only shows Listen and New call, and the replay picker can't give away "SCAM: …". **Single-key shortcuts** run the whole demo without a mouse (Listen, New call, Approve/Decline, steps 1–4, Hang up, Replay; ? lists them)
+  - [x] **Evaluation view** (E, or click the footer tile): the headline numbers from `npm run eval` as large cards plus the per-run table, readable from the back of the room
   - [x] Replay picker as the offline fallback
-  - [x] The receiver's phone mockup auto-fits the warning (largest size that fits, never below 11 px, re-fitted on resize), tested at 8 screen sizes from 1280×720 to 2560×1440 with warnings up to the 40-word maximum
+  - [x] Optional **receiver phone view** at `/phone`: the receiver's screen alone, for a real phone on the same Wi-Fi (the server prints the address at start). One tap arms the alarm sound, it vibrates where supported, and "Hang up" on the scam warning ends the call. Phones are counted apart from dashboards ("1 screen connected · 1 phone"), so they never trigger the stale-tab warning
+  - [x] The receiver's phone mockup auto-fits the warning (largest size that fits, never below 11 px, re-fitted on resize), tested at 9 screen sizes from 1280×720 to 2560×1440 with warnings up to the 40-word maximum
   - [x] Stale-screen protection: the alarm event is named `alarm` (older dashboards ignore it, so a forgotten tab can't read warnings aloud). Every dashboard reloads once when the server restarts (a build id in each state snapshot). The footer shows "N screens connected · build xxxx", amber when more than one dashboard is open
   - [x] Two-person labelling: once the caller is identified, the other speaker is always the Receiver. An outdated server process (no `protocol: 2` in `/api/config`) shows an amber "restart the server" banner
 - **Evaluation:** `npm run eval` (see [Evaluation](#evaluation))
@@ -70,6 +73,8 @@ npm install
 cp .env.example .env     # add RESON8_API_KEY and ANTHROPIC_API_KEY
 npm run dev              # dashboard: http://localhost:3000 (Chrome; allow the microphone)
 ```
+
+On the dashboard, press **P** for presenter mode and **?** for the keyboard shortcuts.
 
 To test without a microphone, replay a scripted call and watch the event stream:
 
@@ -149,7 +154,8 @@ Both Claude calls use Anthropic's server-side refusal fallback (`fallbacks: "def
 | Method | Path | What it does |
 |---|---|---|
 | GET | `/api/config` | Which keys and features are configured |
-| GET | `/api/events` | Server-Sent Events stream. Event types: `state`, `segment`, `score`, `alert`, `agent`, `family`, `report`, `approval`, `hangup`, `error` |
+| GET | `/api/events` | Server-Sent Events stream. Event types: `state`, `segment`, `score`, `alarm`, `roles`, `agent`, `family`, `report`, `approval`, `hangup`, `error`, `screens`. `?client=phone` marks a receiver phone view, counted apart from dashboards |
+| GET | `/phone` | The receiver's screen on its own, for a real phone on the same network (redirects to `/?view=phone`) |
 | GET | `/api/reson8/session` | `{ token, url }`: short-lived Reson8 token plus the WebSocket URL with all parameters |
 | POST | `/api/segment` | `{ speakerId, text }`: add a final transcript sentence. Roles (caller / receiver) are decided by Claude from the content |
 | POST | `/api/roles/swap` | Manual override: swap the caller and receiver labels (or set Speaker 1 = Receiver if not identified yet) |

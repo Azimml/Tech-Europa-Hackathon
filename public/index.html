@@ -4,22 +4,70 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Schutzengel</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%2399f6e4'/%3E%3Cstop offset='1' stop-color='%2314b8a6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cellipse cx='16' cy='5.2' rx='7' ry='2.3' fill='none' stroke='%23fcd34d' stroke-width='2'/%3E%3Cpath d='M16 9.5c2.6 1.9 5.6 2.9 9 3v6.2c0 5.4-3.8 9-9 10.8-5.2-1.8-9-5.4-9-10.8v-6.2c3.4-.1 6.4-1.1 9-3z' fill='url(%23g)'/%3E%3Cpath d='m12 19.2 3 3 5.5-6.2' fill='none' stroke='%23052e2b' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/style.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body class="level-safe">
+  <!-- Icon sprite (Lucide-style strokes, ISC) and the logo: <svg class="icon"><use href="#i-..."/></svg> -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="logo-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#99f6e4"/><stop offset="1" stop-color="#14b8a6"/></linearGradient>
+    </defs>
+    <symbol id="logo" viewBox="0 0 32 32">
+      <ellipse cx="16" cy="5.2" rx="7" ry="2.3" fill="none" stroke="#fcd34d" stroke-width="2"/>
+      <path d="M16 9.5c2.6 1.9 5.6 2.9 9 3v6.2c0 5.4-3.8 9-9 10.8-5.2-1.8-9-5.4-9-10.8v-6.2c3.4-.1 6.4-1.1 9-3z" fill="url(#logo-grad)"/>
+      <path d="m12 19.2 3 3 5.5-6.2" fill="none" stroke="#052e2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-siren" viewBox="0 0 24 24"><path d="M7 18v-6a5 5 0 1 1 10 0v6"/><path d="M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2z"/><path d="M21 12h1"/><path d="M18.5 4.5 18 5"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="m4.929 4.929.707.707"/><path d="M12 12v6"/></symbol>
+    <symbol id="i-landmark" viewBox="0 0 24 24"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M12 2 20 7H4z"/></symbol>
+    <symbol id="i-banknote" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+    <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="M22 2 2 22"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+    <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M2 2l20 20"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M12 19v3"/></symbol>
+    <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="19" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="19" r="1"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.364 18.364a9 9 0 0 0 0-12.728"/></symbol>
+    <symbol id="i-volume-x" viewBox="0 0 24 24"><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3 20 12 6 21z"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-smartphone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+    <symbol id="i-audio" viewBox="0 0 24 24"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/></symbol>
+    <symbol id="i-sys" viewBox="0 0 34 12"><rect x="0" y="8" width="2.4" height="4" rx=".6" fill="currentColor" stroke="none"/><rect x="3.6" y="6" width="2.4" height="6" rx=".6" fill="currentColor" stroke="none"/><rect x="7.2" y="3.5" width="2.4" height="8.5" rx=".6" fill="currentColor" stroke="none"/><rect x="10.8" y="1" width="2.4" height="11" rx=".6" fill="currentColor" stroke="none"/><rect x="17" y="1.5" width="14" height="9" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.2"/><rect x="18.6" y="3.1" width="9.5" height="5.8" rx="1.3" fill="currentColor" stroke="none"/><rect x="31.8" y="4.2" width="1.6" height="3.6" rx=".8" fill="currentColor" stroke="none"/></symbol>
+  </svg>
+
   <header class="bar top">
-    <div class="brand">SCHUTZENGEL <span class="tagline">a guardian angel for phone calls</span></div>
-    <div id="live" class="live" hidden><span class="dot"></span> LISTENING</div>
+    <div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><use href="#logo"/></svg><span class="name">Schutzengel</span><span class="tagline">a guardian angel for phone calls</span></div>
+    <div id="live" class="live" hidden><span class="dot"></span>LISTENING<span id="vu" class="vu" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>
     <div id="conn" class="conn" hidden>reconnecting…</div>
     <div class="controls">
-      <button id="listen" class="primary">Listen</button>
-      <button id="reset">End call / Reset</button>
-      <button id="hangup">Hang up</button>
-      <button id="swap" title="Swap Caller and Receiver labels">Swap speakers</button>
-      <button id="sound" aria-pressed="true">Sound on</button>
-      <select id="script" aria-label="Scripted call"></select>
-      <button id="replay">Replay</button>
+      <button id="listen" class="primary" title="Listen (L)"><svg class="icon" aria-hidden="true"><use href="#i-mic"/></svg><span class="label">Listen</span></button>
+      <button id="reset" title="Start a new call (N)"><svg class="icon" aria-hidden="true"><use href="#i-rotate"/></svg><span class="label">New call</span></button>
+      <button id="hangup" class="op" title="Hang up (H)"><svg class="icon" aria-hidden="true"><use href="#i-phone-off"/></svg><span class="label">Hang up</span></button>
+      <button id="swap" class="op" title="Swap Caller and Receiver labels"><svg class="icon" aria-hidden="true"><use href="#i-swap"/></svg><span class="label">Swap speakers</span></button>
+      <button id="sound" class="op" aria-pressed="true" title="Alarm sound (S)"><svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg><span class="label">Sound on</span></button>
+      <select id="script" class="op" aria-label="Scripted call"></select>
+      <button id="replay" class="op" title="Replay the selected call (R)"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg><span class="label">Replay</span></button>
+      <button id="mode" class="ghost" title="Presenter mode: hide the operator controls (P)" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg></button>
     </div>
     <div id="listen-error" class="inline-error" hidden></div>
     <div id="server-banner" class="server-banner" hidden>The server is running older code. Restart it (<code>npm run dev</code>) and reload this page.</div>
@@ -27,12 +75,15 @@
 
   <section id="status" class="status">
     <div class="status-level">
-      <span id="level" class="level-word">SAFE</span>
-      <span id="scam-type" class="scam-type"></span>
+      <span class="level-icon" aria-hidden="true"><svg class="icon is-safe"><use href="#i-shield-check"/></svg><svg class="icon is-caution"><use href="#i-alert"/></svg><svg class="icon is-scam"><use href="#i-siren"/></svg></span>
+      <span class="level-text"><span id="level" class="level-word">SAFE</span><span id="scam-type" class="scam-type"></span></span>
     </div>
-    <div class="status-risk">
-      <div class="meter"><div id="risk-fill" class="meter-fill"></div></div>
-      <span id="risk-value" class="risk-value">0.00</span>
+    <div class="status-risk"><span id="risk-value" class="risk-value">0%</span><span class="risk-caption">scam risk</span></div>
+    <div id="risk-chart" class="risk-chart" role="img" aria-label="Scam risk after every sentence of the call">
+      <svg id="risk-svg" class="risk-svg"></svg>
+      <span id="th-scam" class="th th-scam">alarm</span>
+      <span id="th-caution" class="th th-caution">caution</span>
+      <span id="risk-empty" class="risk-empty">risk after every sentence</span>
     </div>
     <div class="status-why">
       <div id="reason" class="reason"></div>
@@ -42,36 +93,56 @@
 
   <main class="story">
     <section class="panel talk">
-      <h2>Live transcript <span id="roles-note" class="roles-note" hidden></span></h2>
+      <h2><svg class="icon" aria-hidden="true"><use href="#i-message"/></svg>Live transcript <span id="roles-note" class="roles-note" hidden></span></h2>
       <ol id="transcript" class="transcript"></ol>
     </section>
 
     <section class="panel receiver">
       <div class="phone-col">
-        <h2>Receiver's screen</h2>
-        <div id="phone" class="phone phone-safe">
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-smartphone"/></svg>Receiver's screen</h2>
+        <div id="phone" class="phone phone-safe lock">
           <div class="notch"></div>
+          <div class="phone-status"><span id="phone-clock" class="phone-clock">--:--</span><svg class="phone-sys" viewBox="0 0 34 12" aria-hidden="true"><use href="#i-sys"/></svg></div>
+          <div class="lock-info"><div id="lock-time" class="lock-time">--:--</div><div id="lock-date" class="lock-date"></div></div>
           <div class="phone-head">
-            <span class="phone-icon" aria-hidden="true">⚠</span>
+            <span class="phone-icon" aria-hidden="true"><svg class="ic-alert"><use href="#i-alert"/></svg><svg class="ic-shield"><use href="#i-shield-check"/></svg></span>
             <span id="phone-label" class="phone-label">Protected</span>
           </div>
           <div id="phone-body" class="phone-body"><div id="phone-warning" class="phone-warning"></div></div>
+          <div class="call-info">
+            <div class="avatar"><svg aria-hidden="true"><use href="#i-user"/></svg></div>
+            <div class="call-name">Unknown caller</div>
+            <div id="phone-timer" class="call-timer">00:00</div>
+          </div>
+          <div class="lock-hint">Schutzengel is listening for scam calls</div>
+          <div class="ended-info">
+            <div class="ended-icon"><svg aria-hidden="true"><use href="#i-phone-off"/></svg></div>
+            <div class="ended-title">Call ended</div>
+            <div id="ended-duration" class="ended-duration">00:00</div>
+            <div id="ended-note" class="ended-note"></div>
+          </div>
+          <div class="call-actions" aria-hidden="true">
+            <span class="ca"><svg><use href="#i-mic-off"/></svg></span>
+            <span class="ca"><svg><use href="#i-grip"/></svg></span>
+            <span class="ca"><svg><use href="#i-volume"/></svg></span>
+            <span class="ca end"><svg><use href="#i-phone"/></svg></span>
+          </div>
           <div class="phone-hangup">Hang up</div>
         </div>
       </div>
       <div class="signals-col">
-        <h2>Warning signs</h2>
+        <h2><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>Warning signs</h2>
         <div id="signals" class="signals"></div>
       </div>
     </section>
 
     <section class="panel actions">
-      <h2>Claude acts <span id="agent-status" class="pill">idle</span></h2>
+      <h2><svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg>Claude acts <span id="agent-status" class="pill">standing by</span></h2>
       <ol id="tracker" class="tracker"></ol>
       <div class="details-row">
         <div id="details" class="details"></div>
         <details id="agent-log" class="agent-log" open>
-          <summary>Agent log</summary>
+          <summary>Agent log <span class="summary-sub">· tool calls</span></summary>
           <ol id="agent-steps" class="agent-steps"></ol>
         </details>
       </div>
@@ -79,12 +150,40 @@
   </main>
 
   <footer class="bar metrics">
-    <div class="tile"><span class="k">Scorer latency</span><span id="m-latency" class="v">–</span></div>
+    <div class="tile ready"><span class="k">Powered by</span><span id="ready" class="v chips"></span></div>
+    <div class="tile"><span class="k">Claude response</span><span id="m-latency" class="v">–</span></div>
     <div class="tile"><span class="k">Median this call</span><span id="m-median" class="v">–</span></div>
-    <div class="tile ready"><span class="k">Ready</span><span id="ready" class="v chips"></span></div>
     <div id="screens-tile" class="tile screens"><span class="k">Dashboards</span><span id="screens" class="v">–</span></div>
-    <div id="eval" class="tile eval" hidden><span class="k">Evaluation</span><span id="eval-text" class="v"></span></div>
+    <div id="eval" class="tile eval" hidden role="button" tabindex="0" title="Open the evaluation (E)"><span class="k"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg>Evaluation</span><span id="eval-text" class="v"></span></div>
   </footer>
+
+  <div id="eval-view" class="overlay" hidden><div id="eval-sheet" class="sheet" role="dialog" aria-modal="true" aria-label="Evaluation"></div></div>
+  <div id="help" class="overlay" hidden>
+    <div class="sheet sheet-small" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+      <div class="sheet-head"><div><div class="eyebrow">Presenter</div><h2 class="sheet-title">Keyboard shortcuts</h2></div><button class="ghost close" data-close>Esc</button></div>
+      <dl class="keys">
+        <dt><kbd>L</kbd></dt><dd>Listen / stop listening</dd>
+        <dt><kbd>N</kbd></dt><dd>New call</dd>
+        <dt><kbd>A</kbd> <kbd>D</kbd></dt><dd>Approve / decline the police call</dd>
+        <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Show a step of "Claude acts"</dd>
+        <dt><kbd>E</kbd></dt><dd>Evaluation results</dd>
+        <dt><kbd>H</kbd></dt><dd>Hang up (shows "Call ended" on the receiver's screen)</dd>
+        <dt><kbd>R</kbd></dt><dd>Replay the selected scripted call</dd>
+        <dt><kbd>S</kbd></dt><dd>Alarm sound on / off</dd>
+        <dt><kbd>W</kbd></dt><dd>Swap speakers</dd>
+        <dt><kbd>P</kbd></dt><dd>Presenter mode: hide or show the operator controls</dd>
+        <dt><kbd>?</kbd></dt><dd>This help</dd>
+      </dl>
+    </div>
+  </div>
+  <div id="arm" class="overlay arm" hidden>
+    <div class="sheet sheet-small arm-sheet">
+      <svg class="hero-logo" viewBox="0 0 32 32" aria-hidden="true"><use href="#logo"/></svg>
+      <h2 class="sheet-title">Receiver's phone</h2>
+      <p class="sheet-sub">Tap to turn on the alarm sound. Keep the ringer on: a phone in silent mode mutes it.</p>
+    </div>
+  </div>
+  <div id="flash" class="flash" aria-hidden="true"></div>
   <div id="toast" class="toast" hidden></div>
 </body>
 </html>

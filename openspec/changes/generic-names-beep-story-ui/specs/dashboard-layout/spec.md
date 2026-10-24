@@ -7,7 +7,7 @@ Defines the story layout of the dashboard: one screen that tells the call as a s
 ## ADDED Requirements
 
 ### Requirement: Status bar
-The dashboard SHALL show a full-width status bar above the content area. It contains the current level in large type, a risk bar, the detected scam type, Claude's latest short reason, and, once an alarm has fired, the reaction time. The bar's colour SHALL follow the level (green safe, amber caution, red scam).
+The dashboard SHALL show a full-width status bar above the content area. It contains the current level in large type, the risk as a percentage with a risk-over-time chart (defined by the call-evidence capability of `demo-ready-dashboard`), the detected scam type, Claude's latest short reason, and, once an alarm has fired, the reaction time. The bar's colour SHALL follow the level (green safe, amber caution, red scam).
 
 #### Scenario: Call turns into a scam
 - **WHEN** the level becomes scam
